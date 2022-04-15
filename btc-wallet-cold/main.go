@@ -12,6 +12,8 @@ func main() {
 	dest := flag.String("dest", "", "Destination Address")
 	amount := flag.Int64("amount", 0, "Transaction amount (Satoshi)")
 	txHash := flag.String("txid", "", "Previous transaction hash on blockchain")
+	txIndex := flag.Uint("txindex", 0, "Index of UTXO in the specified transaction to be used as input")
+	pkScript := flag.String("pkscript", "", "PubKey Script")
 
 	flag.Parse()
 
@@ -72,12 +74,15 @@ func main() {
 		if *txHash == "" {
 			log.Fatalf("Previous transaction hash must be provided to post transaction")
 		}
+		if *pkScript== "" {
+			log.Fatalf("PK Script must be provided to post transaction")
+		}
 		var wallet Wallet
 		err := wallet.DecryptFile(*key)
 		if err != nil {
 			log.Fatalln(err, "Error!")
 		}
-		transaction, err := CreateTransaction(wallet.WIF, *dest, *amount, *txHash)
+		transaction, err := CreateTx(wallet.WIF, *dest, *amount, *txHash, *pkScript, *txIndex)
 		if err != nil {
 			log.Fatalln(err, "Error!")
 		}

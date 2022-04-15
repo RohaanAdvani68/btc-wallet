@@ -15,76 +15,117 @@ type Transaction struct {
 	TxId               string
 	SourceAddress      string
 	DestinationAddress string
-	Amount             int64 
+	Amount             int64
 	UnsignedTx         string
-	SignedTx           string 
+	SignedTx           string
 }
 
-func CreateTransaction(secret string, destination string, amount int64, txHash string) (Transaction, error) {
-	var transaction Transaction
-	wif, err := btcutil.DecodeWIF(secret)
+func NewTx() (*wire.MsgTx, error) {
+	return wire.NewMsgTx(wire.TxVersion), nil
+}
+
+func CreateTx(privKey string, destination string, amount int64, txid string, pkScript string, txIndex uint) (Transaction, error) {
+
+	wif, err := btcutil.DecodeWIF(privKey)
 	if err != nil {
 		return Transaction{}, err
 	}
-	addresspubkey, err := btcutil.NewAddressPubKey(wif.PrivKey.PubKey().SerializeUncompressed(), &chaincfg.TestNet3Params)
+
+	// use TestNet3Params for interacting with bitcoin testnet
+	// if we want to interact with main net should use MainNetParams
+	addrPubKey, err := btcutil.NewAddressPubKey(wif.PrivKey.PubKey().SerializeUncompressed(), &chaincfg.TestNet3Params)
 	if err != nil {
 		return Transaction{}, err
 	}
-	// since we are creating raw tx offline, we will not have access to all UTXO info
-	// so we create our own UTXO
-	sourceTx := wire.NewMsgTx(wire.TxVersion)
-	sourceUtxoHash, err := chainhash.NewHashFromStr(txHash)
+
+	/*
+	 * 1 or unit-amount in Bitcoin is equal to 1 satoshi and 1 Bitcoin = 100000000 satoshi
+	 */
+
+	// extracting destination address as []byte from function argument (destination string)
+	destinationAddr, err := btcutil.DecodeAddress(destination, &chaincfg.TestNet3Params)
 	if err != nil {
 		return Transaction{}, err
 	}
-	sourceUtxo := wire.NewOutPoint(sourceUtxoHash, 0)
-	sourceTxIn := wire.NewTxIn(sourceUtxo, nil, nil)
-	destinationAddress, err := btcutil.DecodeAddress(destination, &chaincfg.TestNet3Params)
-	sourceAddress, err := btcutil.DecodeAddress(addresspubkey.EncodeAddress(), &chaincfg.TestNet3Params)
+
+	destinationAddrByte, err := txscript.PayToAddrScript(destinationAddr)
 	if err != nil {
 		return Transaction{}, err
 	}
-	destinationPkScript, err := txscript.PayToAddrScript(destinationAddress)
+
+	// creating a new bitcoin transaction, different sections of the tx, including
+	// input list (contain UTXOs) and outputlist (contain destination address and usually our address)
+	redeemTx, err := NewTx()
 	if err != nil {
 		return Transaction{}, err
 	}
-	sourcePkScript, err := txscript.PayToAddrScript(sourceAddress)
+
+	utxoHash, err := chainhash.NewHashFromStr(txid)
 	if err != nil {
 		return Transaction{}, err
 	}
-	sourceTxOut := wire.NewTxOut(amount, sourcePkScript)
-	sourceTx.AddTxIn(sourceTxIn)
-	sourceTx.AddTxOut(sourceTxOut)
-	sourceTxHash := sourceTx.TxHash()
-	redeemTx := wire.NewMsgTx(wire.TxVersion)
-	destinationUtxo := wire.NewOutPoint(&sourceTxHash, 0)
-	redeemTxIn := wire.NewTxIn(destinationUtxo, nil, nil)
-	redeemTx.AddTxIn(redeemTxIn)
-	redeemTxOut := wire.NewTxOut(amount, destinationPkScript)
+
+	// the second argument is vout or Tx-index, which is the index
+	// of spending UTXO in the transaction that Txid referred to
+	outPoint := wire.NewOutPoint(utxoHash, uint32(txIndex))
+
+	// making the input, and adding it to transaction
+	txIn := wire.NewTxIn(outPoint, nil, nil)
+	redeemTx.AddTxIn(txIn)
+
+	// adding the destination address and the amount to
+	// the transaction as output
+	redeemTxOut := wire.NewTxOut(amount, destinationAddrByte)
 	redeemTx.AddTxOut(redeemTxOut)
-	// sign using sender's pvt key
-	sigScript, err := txscript.SignatureScript(redeemTx, 0, sourceTx.TxOut[0].PkScript, txscript.SigHashAll, wif.PrivKey, false)
-	if err != nil {
-		return Transaction{}, err
-	}
-	redeemTx.TxIn[0].SignatureScript = sigScript
-	flags := txscript.StandardVerifyFlags
-	vm, err := txscript.NewEngine(sourceTx.TxOut[0].PkScript, redeemTx, 0, flags, nil, nil, amount)
-	if err != nil {
-		return Transaction{}, err
-	}
-	if err := vm.Execute(); err != nil {
-		return Transaction{}, err
-	}
+
+	// create output Tx object
+	var transaction Transaction
+
 	var unsignedTx bytes.Buffer
-	var signedTx bytes.Buffer
-	sourceTx.Serialize(&unsignedTx)
-	redeemTx.Serialize(&signedTx)
-	transaction.TxId = sourceTxHash.String()
+	redeemTx.Serialize(&unsignedTx)
+	transaction.TxId = redeemTx.TxHash().String()
 	transaction.UnsignedTx = hex.EncodeToString(unsignedTx.Bytes())
 	transaction.Amount = amount
-	transaction.SignedTx = hex.EncodeToString(signedTx.Bytes())
-	transaction.SourceAddress = sourceAddress.EncodeAddress()
-	transaction.DestinationAddress = destinationAddress.EncodeAddress()
+
+	transaction.SourceAddress = addrPubKey.EncodeAddress()
+	transaction.DestinationAddress = destinationAddr.EncodeAddress()
+
+	// now sign the transaction
+	finalRawTx, err := SignTx(privKey, pkScript, redeemTx)
+
+	transaction.SignedTx = finalRawTx
+
 	return transaction, nil
+}
+
+func SignTx(privKey string, pkScript string, redeemTx *wire.MsgTx) (string, error) {
+
+	wif, err := btcutil.DecodeWIF(privKey)
+	if err != nil {
+		return "", err
+	}
+
+	sourcePKScript, err := hex.DecodeString(pkScript)
+	if err != nil {
+		return "", nil
+	}
+
+	// since there is only one input in our transaction
+	// we use 0 as second argument, if the transaction
+	// has more args, should pass related index
+	signature, err := txscript.SignatureScript(redeemTx, 0, sourcePKScript, txscript.SigHashAll, wif.PrivKey, false)
+	if err != nil {
+		return "", nil
+	}
+
+	// since there is only one input, and want to add
+	// signature to it use 0 as index
+	redeemTx.TxIn[0].SignatureScript = signature
+
+	var signedTx bytes.Buffer
+	redeemTx.Serialize(&signedTx)
+
+	hexSignedTx := hex.EncodeToString(signedTx.Bytes())
+
+	return hexSignedTx, nil
 }
