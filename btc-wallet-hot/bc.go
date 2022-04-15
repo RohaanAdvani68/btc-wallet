@@ -15,3 +15,8 @@ func pushTx(hex string) (gobcy.TXSkel, error) {
 	bc := gobcy.API{os.Getenv("BLOCK_CYPHER_API_KEY"), "btc", "test3"}
 	return bc.PushTX(hex)
 }
+
+func getTx(txHash string) (gobcy.TX, error) {
+	bc := gobcy.API{os.Getenv("BLOCK_CYPHER_API_KEY"), "btc", "test3"}
+	return bc.GetTX(txHash, nil)
+}

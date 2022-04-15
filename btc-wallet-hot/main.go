@@ -12,6 +12,7 @@ func main() {
 	addrHash := flag.String("addr", "", "Wallet Address Hash")
 	txHex := flag.String("tx-hex", "", "Raw Transaction Hex to be broadcast to the BTC Testnet")
 	confirmed := flag.Bool("confirmed", true, "If true, only return confirmed TXs")
+	txHash := flag.String("tx-hash", "", "Transaction hash to look up")
 
 	flag.Parse()
 
@@ -54,7 +55,6 @@ func main() {
 				fmt.Println(i+1, ")\n", string(out))
 			}
 		}
-
 		return
 
 	case "push-tx":
@@ -72,6 +72,20 @@ func main() {
 		fmt.Println(string(out))
 		return
 
+	case "get-tx":
+		if *txHash == "" {
+			log.Fatalf("Transaction hash must be provided to obtain tx details")
+		}
+		tx, err := getTx(*txHash)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		out, err := json.MarshalIndent(tx, "", "  ")
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(out))
+		return
 	default:
 		log.Fatalf("Unsupported method")
 	}
