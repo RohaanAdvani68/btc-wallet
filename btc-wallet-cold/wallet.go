@@ -18,9 +18,9 @@ import (
 )
 
 type Wallet struct {
-	WIF                 string 
-	UncompressedAddress string 
-	CompressedAddress   string 
+	WIF                 string
+	UncompressedAddress string
+	CompressedAddress   string
 }
 
 // generate new wallet and encrypt, save to disk
@@ -50,9 +50,14 @@ func (wallet Wallet) Generate(key string) error {
 }
 
 // destroy existing wallet
-func (wallet Wallet) Destroy() error {
-	err := os.Remove("wallet.dat")
-	return err
+func (wallet Wallet) Destroy(key string) error {
+	if _, err := os.Stat("wallet.dat"); errors.Is(err, os.ErrNotExist) {
+		return errors.New("No wallet exists to be destroyed")
+	}
+	if wallet.Authenticate(key) {
+		return os.Remove("wallet.dat")
+	}
+	return errors.New("Unauthenticated to destroy existing wallet")
 }
 
 func (wallet *Wallet) GetAddresses(passphrase string) error {

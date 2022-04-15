@@ -51,13 +51,9 @@ func main() {
 			log.Fatalf("Key must be provided to destroy wallet")
 		}
 		var wallet Wallet
-		if wallet.Authenticate(*key) {
-			err := wallet.Destroy()
-			if err != nil {
-				log.Fatalln(err, "Error!")
-			}
-		} else {
-			log.Fatal("Invalid key")
+		err := wallet.Destroy(*key)
+		if err != nil {
+			log.Fatalln(err, "Error!")
 		}
 		return
 
@@ -74,7 +70,7 @@ func main() {
 		if *txHash == "" {
 			log.Fatalf("Previous transaction hash must be provided to post transaction")
 		}
-		if *pkScript== "" {
+		if *pkScript == "" {
 			log.Fatalf("PK Script must be provided to post transaction")
 		}
 		var wallet Wallet
@@ -90,5 +86,8 @@ func main() {
 		fmt.Println("Unsigned Transaction:", transaction.UnsignedTx)
 		fmt.Println("TX Hash:", transaction.TxId)
 		return
+
+	default:
+		log.Fatalf("Unsupported method")
 	}
 }
