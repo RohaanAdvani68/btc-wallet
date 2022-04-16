@@ -8,6 +8,9 @@ Once this repo is cloned, navigate to the *btc-wallet-cold* directory. Run the f
 Next, navigate to the *btc-wallet-hot* directory and run the same command:  
  `go build -o lib/main .`
 
+ We will be using the Blockcypher API to interact with the BTC Testnet. You may obtain a free Blockcypher API Key from [here](https://accounts.blockcypher.com). In the *btc-wallet-hot* directory, create a .env file with the following environment variable:
+ * BLOCK_CYPHER_API_KEY={your_api_key}
+
 You are now all set to start interacting with the applications via the command line.
 
 ## Wallet Interactions
