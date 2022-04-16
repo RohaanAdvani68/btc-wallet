@@ -61,9 +61,12 @@ func (wallet Wallet) Destroy(key string) error {
 }
 
 func (wallet *Wallet) GetAddresses(passphrase string) error {
+	if _, err := os.Stat("wallet.dat"); errors.Is(err, os.ErrNotExist) {
+		return errors.New("No wallet exists")
+	}
 	err := wallet.DecryptFile(passphrase)
 	if err != nil {
-		return errors.New(`{ "message": "The password is not correct" }`)
+		return errors.New(`Incorrect password`)
 	}
 	// scrub private key data from response
 	wallet.WIF = ""
